@@ -10,16 +10,17 @@ FRAME_RATE = 60
 
 class WAV_File():
     def __init__(self, file):
-        # Read HEADER
         self.readHeader(file)
         self.createChannels(file)
         self.current_sample = 0
-        self.is_playing = False
         self.song_started = False
+        self.is_playing = False
+        self.song_is_finished = False
+        self.playing_thread = None
         self.stream = pyaudio.PyAudio().open(format=pyaudio.paInt16, channels=1, rate=self.sample_rate, output=True)
 
     def streamMusic(self):
-        while self.current_sample != len(self.channel_1):
+        while self.current_sample != len(self.channel_1) and not self.song_is_finished:
              if self.is_playing:
                 self.stream.write(bytes(self.channel_1[self.current_sample: self.current_sample + self.sample_rate // FRAME_RATE]))
                 self.current_sample += self.sample_rate // FRAME_RATE
@@ -27,6 +28,7 @@ class WAV_File():
     def startPlayingThread(self):
         t = Thread(target=self.streamMusic)
         t.start()
+        return t
 
 
     def readHeader(self, file):
@@ -69,13 +71,18 @@ class WAV_File():
     def play(self):
         self.is_playing = True
         if not self.song_started:
-            self.startPlayingThread()
+            self.playing_thread = self.startPlayingThread()
             self.song_started = True
 
     
     def pause(self):
         self.is_playing = False
 
+    def quitProgramm(self):
+        self.song_is_finished = True
+        self.stream.close()
+        if self.playing_thread != None:
+            self.playing_thread.join()
 
     # TODO currently assumes that every byte is its own int
     def getPixelPositions(self):
@@ -91,7 +98,7 @@ def scrollSign(e):
     return 1 if e.y > 0 else -1
 
 
-def main(filename: str):
+def main(filename: str) -> int:
     if not filename.endswith(".wav"):
         return -1
     width, height = 1200, 1200
@@ -107,7 +114,6 @@ def main(filename: str):
     
     wv = wave.getPixelPositions()
     wv = (height // 2 + wv * 100).astype(int)
-    print(wv)
 
 
     pygame.init()
@@ -124,6 +130,9 @@ def main(filename: str):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 done = True
+                wave.quitProgramm()
+                pygame.quit()
+                return 0 
             if event.type == pygame.MOUSEWHEEL:
                 if event.y > 0 and SECONDS_DISPLAYED == 1:
                     continue
